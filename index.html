@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Shift &amp; Handover</title>
+<meta name="description" content="ระบบตารางเวรและส่งเวร (Shift &amp; Handover) — TUH">
+<meta name="robots" content="noindex, nofollow">
+<!-- This is a THIN iframe wrapper only, published on GitHub Pages so the app has a short, memorable
+     public URL — the same pattern as the team's other project (bearsec, see
+     https://tuh-apps.github.io/bearsec/). All real application logic, data and security controls
+     live in the Google Apps Script Web App below; this page has no logic of its own beyond loading it. -->
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="shortcut icon" href="favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<style>
+  :root { --teal: #0f6e6e; --teal-dark: #0b5757; --bg: #f4f7f7; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; background: var(--bg); font-family: -apple-system, "Segoe UI", Roboto, "Noto Sans Thai", Arial, sans-serif; }
+  #app-frame { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; background: #fff; }
+
+  /* Loading overlay — shown until the app frame reports it has loaded, or replaced by the
+     slow-network fallback below if loading takes unusually long. Matches the in-app brand color. */
+  #loader { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 16px; background: var(--bg); transition: opacity .25s ease; z-index: 10; }
+  #loader.hidden { opacity: 0; pointer-events: none; }
+  .loader-badge { width: 64px; height: 64px; border-radius: 16px; background: var(--teal);
+    display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 20px rgba(15,110,110,.25); }
+  .loader-badge svg { width: 36px; height: 36px; }
+  .spinner { width: 26px; height: 26px; border-radius: 50%; border: 3px solid rgba(15,110,110,.18);
+    border-top-color: var(--teal); animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #loader p { margin: 0; color: var(--teal-dark); font-size: .95rem; font-weight: 600; }
+  #loader small { color: #5c7a7a; font-size: .8rem; }
+
+  /* Slow-network / blocked-frame fallback — hidden by default, shown only if the app frame hasn't
+     finished loading within a few seconds (see the timeout in the script below). Cross-origin
+     iframes don't reliably fire a JS "error" event, so a timeout is the only dependable signal here. */
+  #fallback { display: none; text-align: center; max-width: 320px; }
+  #fallback.show { display: block; }
+  #fallback a { display: inline-block; margin-top: 10px; background: var(--teal); color: #fff; text-decoration: none;
+    padding: 10px 18px; border-radius: 8px; font-weight: 600; font-size: .9rem; }
+  #fallback a:hover { background: var(--teal-dark); }
+</style>
+</head>
+<body>
+
+  <div id="loader">
+    <div class="loader-badge">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="none"/><rect x="5" y="6" width="14" height="12" rx="1.5" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 10h14M9 4v4M15 4v4" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/></svg>
+    </div>
+    <div class="spinner" role="status" aria-label="กำลังโหลด"></div>
+    <p>กำลังโหลดระบบ Shift &amp; Handover…</p>
+    <div id="fallback">
+      <small>การโหลดใช้เวลานานกว่าปกติ อาจเกิดจากเครือข่ายช้า หรือเบราว์เซอร์บล็อกการแสดงผลแบบ iframe</small>
+      <br>
+      <a id="fallback-link" href="#" target="_blank" rel="noopener">เปิดระบบในแท็บใหม่แทน</a>
+    </div>
+  </div>
+
+  <!--
+    ⚠️ ตั้งค่าก่อนเผยแพร่ (SET THIS BEFORE PUBLISHING):
+    แทนที่ APP_URL ด้านล่างด้วย URL ของ Web App ที่ deploy จริง (ลงท้ายด้วย /exec)
+    เช่น https://script.google.com/macros/s/XXXXXXXXXXXXXXXXXXXXXXXXXXXX/exec
+    อย่าลืมตั้งค่า SystemSettings key "public_web_app_url" ในสเปรดชีตให้เป็น URL ของหน้านี้ด้วย
+    (เช่น https://tuh-apps.github.io/<ชื่อโปรเจกต์>/) เพื่อให้ favicon และลิงก์ในอีเมลแจ้งเตือนทำงาน —
+    doGet() ใน Code.gs จะดึงไอคอนจาก "<public_web_app_url>/favicon.png" โดยอัตโนมัติ ซึ่ง favicon.png
+    ในโฟลเดอร์นี้ตั้งชื่อไว้ให้ตรงกับที่โค้ดฝั่งเซิร์ฟเวอร์คาดหวังไว้แล้ว ไม่ต้องแก้ชื่อไฟล์
+  -->
+  <script>
+    var APP_URL = 'REPLACE_WITH_DEPLOYED_WEB_APP_EXEC_URL';
+  </script>
+
+  <iframe id="app-frame" title="Shift &amp; Handover" allow="clipboard-write" referrerpolicy="strict-origin-when-cross-origin"></iframe>
+
+  <script>
+    (function () {
+      var loader = document.getElementById('loader');
+      var fallback = document.getElementById('fallback');
+      var fallbackLink = document.getElementById('fallback-link');
+      var frame = document.getElementById('app-frame');
+      var loaded = false;
+
+      fallbackLink.href = APP_URL;
+
+      frame.addEventListener('load', function () {
+        loaded = true;
+        loader.classList.add('hidden');
+        setTimeout(function () { loader.style.display = 'none'; }, 300);
+      });
+
+      // Cross-origin iframes rarely fire a load event on failure, so this timeout is the real
+      // safety net: if the app hasn't loaded within 8s (slow network, or a browser/extension
+      // blocking framed content), offer a direct "open in a new tab" link instead of leaving the
+      // visitor staring at a spinner forever.
+      setTimeout(function () {
+        if (!loaded) fallback.className += ' show';
+      }, 8000);
+
+      frame.src = APP_URL;
+    })();
+  </script>
+
+  <noscript>
+    <div style="padding:32px;text-align:center;font-family:sans-serif;color:#0b5757;">
+      หน้านี้ต้องเปิดใช้งาน JavaScript จึงจะแสดงระบบ Shift &amp; Handover ได้
+    </div>
+  </noscript>
+
+</body>
+</html>

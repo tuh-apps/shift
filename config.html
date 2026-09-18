@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!-- โหลด Teams SDK -->
+  <script src="https://res.cdn.office.net/teams-js/2.0.0/js/MicrosoftTeams.min.js"></script>
+  <style>
+    body { font-family: sans-serif; padding: 20px; color: #333; }
+  </style>
+</head>
+<body>
+  <h3>ระบบจัดตารางเวร & ส่งต่องาน IT</h3>
+  <p>กดปุ่ม <b>Save</b> ด้านล่างขวาเพื่อเพิ่มแท็บและสร้างโพสต์การ์ดลงแชนแนล</p>
+
+  <script>
+    // สั่งให้ Teams รู้จักหน้าตั้งค่าและเปิดให้ปุ่ม Save กดได้
+    microsoftTeams.app.initialize().then(() => {
+      microsoftTeams.pages.config.registerOnSaveHandler((saveEvent) => {
+        microsoftTeams.pages.config.setConfig({
+          suggestedDisplayName: "Shift & Handover",
+          contentUrl: "https://tuh-apps.github.io/shift/",
+          websiteUrl: "https://tuh-apps.github.io/shift/",
+          entityId: "shiftAndHandoverTab"
+        });
+        saveEvent.notifySuccess();
+      });
+
+      // ปลดล็อกปุ่ม Save ให้กดได้
+      microsoftTeams.pages.config.setValidityState(true);
+    });
+  </script>
+</body>
+</html>

@@ -6,68 +6,93 @@
 <title>Shift &amp; Handover</title>
 <meta name="description" content="ระบบตารางเวรและส่งเวร (Shift &amp; Handover) — TUH">
 <meta name="robots" content="noindex, nofollow">
-<!-- This is a THIN iframe wrapper only, published on GitHub Pages so the app has a short, memorable
-     public URL — the same pattern as the team's other project (bearsec, see
-     https://tuh-apps.github.io/bearsec/). All real application logic, data and security controls
-     live in the Google Apps Script Web App below; this page has no logic of its own beyond loading it. -->
+<!-- Shift & Handover — หน้าครอบ (GitHub Pages) v2 · Round 77 (2026-11-16)
+     • หน้านี้ไม่มีตรรกะของระบบ ไม่มีข้อมูล และไม่มีการควบคุมความปลอดภัยของตัวเอง ทุกอย่างอยู่ใน Web App บน Apps Script
+     • หน้ารอโหลดใช้โหมดมืด/สว่างตามที่ผู้ใช้ตั้งไว้ในแอป: แอปส่งค่าโหมดมาให้ (postMessage) หน้านี้จำไว้ในเบราว์เซอร์
+       แล้วใช้ตั้งแต่ภาพแรกของการเปิดครั้งถัดไป — แบบเดียวกับ BearSec แต่รับเฉพาะ "โหมด" และ "พร้อมแล้ว" เท่านั้น
+     • รับข้อความเฉพาะจากโดเมนของ Google Apps Script และเฉพาะค่าในรายการ (ไม่มีข้อมูลลับในข้อความ)
+     • ไม่โหลดอะไรจาก CDN: ไอคอนอยู่ในโฟลเดอร์นี้, ใช้ฟอนต์ของเครื่องเหมือนในแอป -->
+<link rel="preconnect" href="https://script.google.com">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="shortcut icon" href="favicon.ico">
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<noscript><style>#loader { display: none !important; }</style></noscript>
+<script>
+  // ทำงานก่อนวาดภาพแรก: ใช้โหมดที่จำไว้ (DARK/LIGHT) — ไม่มีค่า หรือ SYSTEM = ตามโหมดของเครื่อง (CSS ด้านล่าง)
+  var SHIFT_WRAP_THEME_KEY = 'shift.wrap.theme';
+  (function () {
+    try {
+      var t = localStorage.getItem(SHIFT_WRAP_THEME_KEY);
+      if (t === 'DARK' || t === 'LIGHT') document.documentElement.setAttribute('data-theme', t.toLowerCase());
+    } catch (e) { /* เบราว์เซอร์ไม่ให้ใช้ localStorage — ใช้โหมดของเครื่องแทน */ }
+  })();
+</script>
 <style>
-  :root { --teal: #0f6e6e; --teal-dark: #0b5757; --bg: #f4f7f7; }
+  /* สีชุดเดียวกับแอป (Index.html :root) เพื่อให้เปลี่ยนจากหน้านี้เข้าแอปแล้วดูเป็นหน้าเดียวกัน */
+  :root { --bg: #f7f8fa; --text: #191c26; --text-muted: #676c80; --border: #e6e8ef;
+    --primary: #0f6e6e; --primary-hover: #0b5757; --primary-soft: #e6f2f1; --brand-shadow: rgba(15,110,110,.28); }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #0e1015; --text: #eef0f4; --text-muted: #9aa0b4; --border: #2a2e3a;
+      --primary: #3ba8a3; --primary-hover: #57bdb8; --primary-soft: #16302e; --brand-shadow: rgba(0,0,0,.45); }
+  }
+  :root[data-theme="dark"] { --bg: #0e1015; --text: #eef0f4; --text-muted: #9aa0b4; --border: #2a2e3a;
+    --primary: #3ba8a3; --primary-hover: #57bdb8; --primary-soft: #16302e; --brand-shadow: rgba(0,0,0,.45); }
+
   * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; height: 100%; background: var(--bg); font-family: -apple-system, "Segoe UI", Roboto, "Noto Sans Thai", Arial, sans-serif; }
-  #app-frame { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; background: #fff; }
+  html, body { margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans Thai", "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased; line-height: 1.5; }
+  /* ไม่ตั้ง color-scheme ให้ iframe: ถ้าโหมดของหน้านี้กับหน้าของ Google ต่างกัน เบราว์เซอร์จะวาดพื้นทึบสีขาวรอง iframe */
+  #app-frame { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; background: transparent; }
 
-  /* Loading overlay — shown until the app frame reports it has loaded, or replaced by the
-     slow-network fallback below if loading takes unusually long. Matches the in-app brand color. */
-  #loader { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 16px; background: var(--bg); transition: opacity .25s ease; z-index: 10; }
+  /* หน้ารอโหลด — จัดวางเหมือนหน้า "กำลังโหลด..." ของแอป (#auth-shell + .auth-lockup + #view-loading)
+     และปิดทับ iframe จนกว่าแอปจะบอกว่าวาดหน้าแรกแล้ว จึงไม่เห็นพื้นขาวของหน้าครอบ Google ระหว่างโหลด */
+  #loader { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 24px 16px; background: var(--bg); background-image: radial-gradient(560px 320px at 50% -8%, var(--primary-soft), transparent 70%);
+    transition: opacity .2s ease; }
   #loader.hidden { opacity: 0; pointer-events: none; }
-  .loader-badge { width: 64px; height: 64px; border-radius: 16px; background: var(--teal);
-    display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 20px rgba(15,110,110,.25); }
-  .loader-badge svg { width: 36px; height: 36px; }
-  .spinner { width: 26px; height: 26px; border-radius: 50%; border: 3px solid rgba(15,110,110,.18);
-    border-top-color: var(--teal); animation: spin 0.8s linear infinite; }
+  .lockup { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-bottom: 22px; text-align: center; }
+  .brand-mark { width: 48px; height: 48px; border-radius: 14px; background: var(--primary); margin-bottom: 8px;
+    display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 16px var(--brand-shadow); }
+  .brand-mark svg { width: 26px; height: 26px; stroke: #fff; fill: none; stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round; }
+  .name { font-size: 1.2rem; font-weight: 800; letter-spacing: -.015em; }
+  .tagline { font-size: .86rem; color: var(--text-muted); }
+  /* margin 32px บน-ล่าง = ระยะเดียวกับการ์ด #view-loading ในแอป ทำให้โลโก้/ข้อความอยู่ตำแหน่งเดียวกันตอนสลับเข้าแอป */
+  .loading { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 32px 0; color: var(--text-muted); }
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--primary);
+    border-radius: 50%; animation: spin .7s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  #loader p { margin: 0; color: var(--teal-dark); font-size: .95rem; font-weight: 600; }
-  #loader small { color: #5c7a7a; font-size: .8rem; }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.1s; } }
 
-  /* Slow-network / blocked-frame fallback — hidden by default, shown only if the app frame hasn't
-     finished loading within a few seconds (see the timeout in the script below). Cross-origin
-     iframes don't reliably fire a JS "error" event, so a timeout is the only dependable signal here. */
-  #fallback { display: none; text-align: center; max-width: 320px; }
+  /* โหลดนานผิดปกติ (เครือข่ายช้า หรือเบราว์เซอร์บล็อก iframe) — แสดงลิงก์เปิดระบบในแท็บใหม่ */
+  #fallback { display: none; margin-top: 18px; max-width: 320px; text-align: center; font-size: .82rem; color: var(--text-muted); }
   #fallback.show { display: block; }
-  #fallback a { display: inline-block; margin-top: 10px; background: var(--teal); color: #fff; text-decoration: none;
-    padding: 10px 18px; border-radius: 8px; font-weight: 600; font-size: .9rem; }
-  #fallback a:hover { background: var(--teal-dark); }
+  #fallback a { display: inline-block; margin-top: 10px; background: var(--primary); color: #fff; text-decoration: none;
+    padding: 10px 18px; border-radius: 12px; font-weight: 600; font-size: .9rem; }
+  #fallback a:hover, #fallback a:focus-visible { background: var(--primary-hover); }
 </style>
 </head>
 <body>
 
-  <div id="loader">
-    <div class="loader-badge">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="none"/><rect x="5" y="6" width="14" height="12" rx="1.5" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 10h14M9 4v4M15 4v4" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/></svg>
+  <div id="loader" role="status" aria-live="polite">
+    <div class="lockup">
+      <div class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg></div>
+      <div class="name">Shift &amp; Handover</div>
+      <div class="tagline">ระบบจัดตารางเวร และส่งต่องานสำหรับบุคลากร</div>
     </div>
-    <div class="spinner" role="status" aria-label="กำลังโหลด"></div>
-    <p>กำลังโหลดระบบ Shift &amp; Handover…</p>
+    <p class="loading"><span class="spinner" aria-hidden="true"></span>กำลังโหลด...</p>
     <div id="fallback">
-      <small>การโหลดใช้เวลานานกว่าปกติ อาจเกิดจากเครือข่ายช้า หรือเบราว์เซอร์บล็อกการแสดงผลแบบ iframe</small>
-      <br>
+      การโหลดใช้เวลานานกว่าปกติ อาจเกิดจากเครือข่ายช้า หรือเบราว์เซอร์บล็อกการแสดงผลแบบ iframe<br>
       <a id="fallback-link" href="#" target="_blank" rel="noopener">เปิดระบบในแท็บใหม่แทน</a>
     </div>
   </div>
 
   <!--
-    ⚠️ ตั้งค่าก่อนเผยแพร่ (SET THIS BEFORE PUBLISHING):
-    แทนที่ APP_URL ด้านล่างด้วย URL ของ Web App ที่ deploy จริง (ลงท้ายด้วย /exec)
-    เช่น https://script.google.com/macros/s/XXXXXXXXXXXXXXXXXXXXXXXXXXXX/exec
-    อย่าลืมตั้งค่า SystemSettings key "public_web_app_url" ในสเปรดชีตให้เป็น URL ของหน้านี้ด้วย
-    (เช่น https://tuh-apps.github.io/<ชื่อโปรเจกต์>/) เพื่อให้ favicon และลิงก์ในอีเมลแจ้งเตือนทำงาน —
-    doGet() ใน Code.gs จะดึงไอคอนจาก "<public_web_app_url>/favicon.png" โดยอัตโนมัติ ซึ่ง favicon.png
-    ในโฟลเดอร์นี้ตั้งชื่อไว้ให้ตรงกับที่โค้ดฝั่งเซิร์ฟเวอร์คาดหวังไว้แล้ว ไม่ต้องแก้ชื่อไฟล์
+    🔧 แก้จุดเดียว: APP_URL = URL /exec ของ Web App
+    ใช้ URL จาก "Manage deployments > แก้ไข Deployment เดิม (ไอคอนดินสอ) > New version" เท่านั้น
+    อย่าใช้ "New deployment" เพราะจะได้ URL ใหม่ และหน้านี้จะเชื่อมไม่ติด
   -->
   <script>
     var APP_URL = 'https://script.google.com/macros/s/AKfycbxD6fE2NAejcUXNUMrm5UraLlpyTTnjGZ0G7fWJ2d3HQOXAxr5tqa1R178Nqfqx_WGw/exec';
@@ -77,34 +102,68 @@
 
   <script>
     (function () {
+      var FALLBACK_AFTER_MS = 8000;      // ยังไม่พร้อมเกินเวลานี้ → แสดงลิงก์ "เปิดระบบในแท็บใหม่แทน"
+      // หลัง iframe โหลดเสร็จ ถ้าแอปยังไม่ส่ง "พร้อมแล้ว" จะรออีกเท่านี้ก่อนเปิดให้เห็น iframe
+      // • แอปเคยส่ง "พร้อมแล้ว" มาก่อน (รุ่นที่รองรับ) → รอนานได้ เพราะแอปจะส่งมาแน่ ไม่ต้องเห็นพื้นขาวของ Google
+      // • ยังไม่เคย หรือรอบก่อนไม่ส่ง (เช่น ย้อนกลับไปใช้รุ่นเก่า, หน้า error ของ Google/เบราว์เซอร์) → รอสั้น แล้วเปิดให้เห็นตามเดิม
+      var GRACE_KNOWN_READY_MS = 12000;
+      var GRACE_UNKNOWN_MS = 2500;
+      var READY_CAPABLE_KEY = 'shift.wrap.readyCapable';
+      var ALLOWED_ORIGIN = /^https:\/\/([a-z0-9-]+\.)*(googleusercontent\.com|script\.google\.com)$/;
+      var THEMES = { LIGHT: 1, DARK: 1, SYSTEM: 1 };
+
       var loader = document.getElementById('loader');
       var fallback = document.getElementById('fallback');
-      var fallbackLink = document.getElementById('fallback-link');
       var frame = document.getElementById('app-frame');
-      var loaded = false;
+      var hidden = false, graceTimer = null;
 
-      fallbackLink.href = APP_URL;
+      function storageGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+      function storageSet(k, v) { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { /* ใช้ไม่ได้ — ข้าม */ } }
 
-      frame.addEventListener('load', function () {
-        loaded = true;
+      document.getElementById('fallback-link').href = APP_URL;
+
+      function applyTheme(t) {
+        if (t === 'DARK' || t === 'LIGHT') document.documentElement.setAttribute('data-theme', t.toLowerCase());
+        else document.documentElement.removeAttribute('data-theme'); // SYSTEM → ตามโหมดของเครื่อง
+      }
+      function rememberTheme(t) { storageSet(SHIFT_WRAP_THEME_KEY, t === 'SYSTEM' ? null : t); } // SYSTEM = ไม่จำ → ตามโหมดของเครื่อง
+      function hideLoader() {
+        if (hidden) return;
+        hidden = true;
+        if (graceTimer) clearTimeout(graceTimer);
+        fallback.classList.remove('show');
         loader.classList.add('hidden');
-        setTimeout(function () { loader.style.display = 'none'; }, 300);
+        setTimeout(function () { loader.style.display = 'none'; }, 250);
+      }
+
+      // ข้อความจากแอป: { type: 'shift-ui', v: 1, theme?: 'LIGHT'|'DARK'|'SYSTEM', ready?: true }
+      // เชื่อเฉพาะโดเมนของ Apps Script และเฉพาะค่าในรายการ — ข้อความอื่นทิ้งเงียบๆ
+      window.addEventListener('message', function (e) {
+        if (typeof e.origin !== 'string' || !ALLOWED_ORIGIN.test(e.origin)) return;
+        var d = e.data;
+        if (!d || typeof d !== 'object' || d.type !== 'shift-ui' || d.v !== 1) return;
+        if (typeof d.theme === 'string' && THEMES.hasOwnProperty(d.theme)) { applyTheme(d.theme); rememberTheme(d.theme); }
+        if (d.ready === true) { storageSet(READY_CAPABLE_KEY, '1'); hideLoader(); }
       });
 
-      // Cross-origin iframes rarely fire a load event on failure, so this timeout is the real
-      // safety net: if the app hasn't loaded within 8s (slow network, or a browser/extension
-      // blocking framed content), offer a direct "open in a new tab" link instead of leaving the
-      // visitor staring at a spinner forever.
-      setTimeout(function () {
-        if (!loaded) fallback.className += ' show';
-      }, 8000);
+      frame.addEventListener('load', function () {
+        if (hidden || graceTimer) return;
+        var knownReady = storageGet(READY_CAPABLE_KEY) === '1';
+        graceTimer = setTimeout(function () {
+          storageSet(READY_CAPABLE_KEY, null); // รอบนี้แอปไม่ส่ง "พร้อมแล้ว" → ครั้งหน้ารอสั้น
+          hideLoader();
+        }, knownReady ? GRACE_KNOWN_READY_MS : GRACE_UNKNOWN_MS);
+      });
+
+      // iframe ข้ามโดเมนแทบไม่เคยส่งเหตุการณ์ error ให้เชื่อถือได้ จึงใช้เวลาเป็นสัญญาณหลัก
+      setTimeout(function () { if (!hidden) fallback.classList.add('show'); }, FALLBACK_AFTER_MS);
 
       frame.src = APP_URL;
     })();
   </script>
 
   <noscript>
-    <div style="padding:32px;text-align:center;font-family:sans-serif;color:#0b5757;">
+    <div style="padding:32px;text-align:center;font-family:sans-serif;">
       หน้านี้ต้องเปิดใช้งาน JavaScript จึงจะแสดงระบบ Shift &amp; Handover ได้
     </div>
   </noscript>
